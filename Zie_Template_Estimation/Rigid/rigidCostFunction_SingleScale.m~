@@ -1,0 +1,62 @@
+function [f,df] = rigidCostFunction_SingleScale(p, I, J, points,centerI, centerJ, Itrival,Jtrival,scaleI,scaleJ,det,onlyTranslate,direc,similarity,bins)
+
+sizePoints = size(points,1);
+
+df=zeros(numel(p),1);
+
+rotx=p(4); roty=p(5);rotz=p(6);
+t11=p(1);t12=p(2);t13=p(3);
+s1=p(7);
+
+%Rotation matrices
+Rx=[1 0 0; 0 cos(rotx) -sin(rotx); 0 sin(rotx) cos(rotx)];
+Ry=[cos(roty) 0 sin(roty); 0 1 0; -sin(roty) 0 cos(roty)];
+Rz=[cos(rotz) -sin(rotz) 0; sin(rotz) cos(rotz) 0; 0 0 1];
+R=Rz*Ry*Rx;
+S=[(1+s1)];
+
+%translation
+t1=zeros(3,1);t1(1)=t11;t1(2)=t12;t1(3)=t13;
+
+%derived rotation matrices
+dRx=Rz*Ry*[0 0 0; 0 -sin(rotx) -cos(rotx); 0 cos(rotx) -sin(rotx)];
+dRy=Rz*[-sin(roty) 0 cos(roty); 0 0 0; -cos(roty) 0 -sin(roty)]*Rx;
+dRz=[-sin(rotz) -cos(rotz) 0; cos(rotz) -sin(rotz) 0; 0 0 0]*Ry*Rx;
+size_points=size(points,1);
+fwpoints=(points-repmat(centerI,size_points,1))*S*R+repmat(t1',[size_points 1])+repmat(center,size_points,1);
+
+
+switch similarity
+    case 'nmi'
+        [res,gradSim(:,1),gradSim(:,2),gradSim(:,3)]=NMI3D_DET_PW3(fwpoints,Jtrival+2,I+2,[0  bins-1 0  bins-1 ], [bins bins], [0 0 0],[scaleI(1) scaleI(2) scaleI(3)],det);
+    case 'pnorm'
+        [res,gradSim(:,1),gradSim(:,2),gradSim(:,3)]=PNorm_det(fwpoints,Jtrival,I,[0  bins-1 0  bins-1 ],[140 140],[0 0 0],scaleI, 1,double(det));
+end
+
+
+
+gradSim(:,1)=gradSim(:,1)./scaleI(1);
+gradSim(:,2)=gradSim(:,2)./scaleI(2);
+gradSim(:,3)=gradSim(:,3)./scaleI(3);
+
+
+df(1)=sum(d(:,1));
+df(2)=sum(d(:,2));
+df(3)=sum(d(:,3));
+df(7)=sum(sum((points-repmat(center,size_points,1))*R.*gradSim,2))*0;
+df(4)=sum(sum((points-repmat(center,size_points,1))*S*dRx.*gradSim,2));
+df(5)=sum(sum((points-repmat(center,size_points,1))*S*dRy.*gradSim,2));
+df(6)=sum(sum((points-repmat(center,size_points,1))*S*dRz.*gradSim,2));
+
+
+
+switch similarity
+    
+    case 'nmi'
+        f=6-res+6-invres;
+        
+    case 'pnorm'
+        f=res+invres;
+end
+
+end
